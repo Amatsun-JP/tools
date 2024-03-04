@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ja">
+	<head>
+		<meta http-equiv="Content-Language" content="ja">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta name="description" content="チャート メーカー">
+		<meta name="keywords" content="チャート メーカー">
+		<title>チャート メーカー</title>
+		<link href="https://fonts.googleapis.com/css2?family=Kosugi&display=swap" rel="stylesheet">
+		<style type="text/css">
+* {
+	padding: 0;
+	margin: 0;
+	font-family: 'Kosugi';
+}
+
+body {
+	background: #eeeeee;
+}
+
+h1 {
+	margin: 10px;
+}
+
+div#chart_body {
+	position: relative;
+}
+
+div#chart {
+	float: left;
+	width: fit-content;
+	background: #ffffff;
+	padding: 20px;
+	margin: 10px;
+}
+
+h2#chart_title {
+	text-align: center;
+	height: 40px;
+}
+
+h3.chart_align_horizontal, h3.chart_align_vertical {
+	margin: 0;
+	text-align: center;
+}
+
+h3.chart_align_vertical {
+	padding: 5px 0 5px 0;
+	height: 20px;
+}
+
+h3.chart_align_horizontal {
+	padding: 0 5px 0 5px;
+	height: 800px;
+	width: 20px;
+	writing-mode: vertical-rl;
+}
+
+h3#left_title {
+	float: left;
+	left: 0;
+}
+
+h3#right_title {
+	float: right;
+	right: 0;
+}
+
+svg#chart_frame {
+	width: 800px;
+	height: 800px;
+}
+
+svg#chart_frame rect {
+	fill: none;
+	stroke: #888888;
+	stroke-width: 8px;
+}
+
+svg#chart_frame line {
+	stroke: #888888;
+	stroke-width: 2px;
+}
+
+div.chart_data {
+	position: absolute;
+	height: 20px;
+	line-height: 20px;
+	transform: translate(-10px, -11px);
+	background: rgba(255, 255, 255, 0.5);
+	border-radius: 10px;
+}
+
+svg.chart_point {
+	padding: auto 0 auto 0;
+	width: 20px;
+	height: 20px;
+	float: left;
+}
+
+svg.chart_point circle {
+	 stroke: #888888;
+	 stroke-width: 1px;
+	 cx: 10px;
+	 cy: 10px;
+	 r: 7px;
+}
+
+span.data_name {
+	font-size: 18px;
+	text-shadow:
+		-1px -1px #ffffff,
+		-1px  1px #ffffff,
+		 1px -1px #ffffff,
+		 1px  1px #ffffff;
+}
+
+div#chart_form {
+	float: left;
+	padding: 10px;
+}
+
+div#chart_form_data {
+	max-height: 710px;
+	overflow-y: auto;
+}
+
+div#chart_form table {
+	border-collapse: collapse;
+}
+
+div#chart_form table th ,
+div#chart_form table td {
+	background: #cccccc;
+	border: 4px solid #eeeeee;
+	padding: 4px;
+	line-height: 24px;
+	vertical-align: middle;
+}
+
+div#chart_form input[type="text"] {
+	padding: 2px;
+	margin: 2px;
+}
+
+div#chart_form input[type="text"].text_large {
+	min-width: 400px;
+}
+
+div#chart_form input[type="range"].chart_data_range {
+	-webkit-appearance: none;
+	width: 75%;
+	height: 0;
+	margin: 8px 0 8px 0;
+	outline: none;
+	background: none;
+	border: 2px solid #aaaaaa;
+}
+
+div#chart_form input[type="range"].chart_data_range::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	background: #444444;
+	width: 4px;
+	height: 16px;
+}
+
+div#chart_form input[type="text"].chart_data_value {
+	width: 36px;
+	text-align: right;
+	margin-left: 10px;
+	margin-right: 0;
+}
+
+button {
+	padding: 2px;
+}
+
+a#download {
+	display: none;
+}
+
+input#upload {
+	display: none;
+}
+		</style>
+		<script type="text/javascript" src="script/jQuerry.js"></script>
+		<script type="text/javascript" src="script/html2canvas.js"></script>
+		<script type="text/javascript">
+var maxId = 0;
+
+$(function() {
+	$('#button_add').on('click', addChartData);
+	
+	$('#form_title').on('input', function() {$('#chart_title').html(event.target.value);});
+	$('#form_top').on('input', function() {$('#top_title').html(event.target.value);});
+	$('#form_left').on('input', function() {$('#left_title').html(event.target.value);});
+	$('#form_right').on('input', function() {$('#right_title').html(event.target.value);});
+	$('#form_bottom').on('input', function() {$('#bottom_title').html(event.target.value);});
+	
+	$('#button_download').on('click', downloadImage);
+	$('#button_clipboard').on('click', clipboardImage);
+	$('#button_export').on('click', exportData);
+	$('#button_import').on('click', importData);
+	$('#upload').on('change', uploadFile);
+	
+	addChartData();
+});
+
+function nameInput() {
+	var tempArray = event.target.id.split('_');
+	updateName(new Number(tempArray[1]), event.target.value);
+}
+
+function colorInput() {
+	var tempArray = event.target.id.split('_');
+	updateColor(new Number(tempArray[1]), event.target.value);
+}
+
+function removeOnClick() {
+	var tempArray = event.target.id.split('_');
+	
+	$('#chart_data' + tempArray[1]).remove();
+	$('#data_' + tempArray[1] + '_form').remove();
+	
+	for (var i = new Number(tempArray[1]) + 1; i <= maxId ; i++) {
+		$('#chart_data' + i).attr('id', 'chart_data' + (i-1));
+		$('#chart_circle' + i).attr('id', 'chart_circle' + (i-1));
+		$('#chart_name' + i).attr('id', 'chart_name' + (i-1));
+		$('#data_' + i + '_form').attr('id', 'data_' + (i-1) + '_form');
+		$('#data_' + i + '_name').attr('id', 'data_' + (i-1) + '_name');
+		$('#data_' + i + '_color').attr('id', 'data_' + (i-1) + '_color');
+		$('#data_' + i + '_remove').attr('id', 'data_' + (i-1) + '_remove');
+		$('#data_' + i + '_vertical').attr('id', 'data_' + (i-1) + '_vertical');
+		$('#data_' + i + '_horizontal').attr('id', 'data_' + (i-1) + '_horizontal');
+	}
+	
+	maxId -= 1;
+}
+
+function rangeOnInput() {
+	var tempArray = event.target.id.split('_');
+	
+	if (tempArray[2] == 'vertical') {
+		updateVertical(new Number(tempArray[1]), event.target.value);
+	} else if (tempArray[2] == 'horizontal') {
+		updateHorizontal(new Number(tempArray[1]), event.target.value);
+	}
+}
+
+function updateName(id, value) {
+	$('#chart_name' + id).html(value);
+	$('#data_' + id + '_name').val(value);
+}
+
+function updateColor(id, value) {
+	$('#chart_circle' + id).attr('fill', value);
+	$('#data_' + id + '_color').val(value);
+}
+
+function updateVertical(id, value) {
+	$('#chart_data' + id).css('top', (100 - new Number(value)) + '%');
+	$('#data_' + id + '_vertical').val(value);
+	$('#value_' + id + '_vertical').attr('value', value);
+}
+
+function updateHorizontal(id, value) {
+	$('#chart_data' + id).css('left', value + '%');
+	$('#data_' + id + '_horizontal').val(value);
+	$('#value_' + id + '_horizontal').attr('value', value);
+}
+
+function addChartData(name, color, verticalValue, horizontalValue) {
+	console.log('name', name);
+	maxId += 1;
+	
+	$('#chart_body').append(getAppendChartDataDivHtml(maxId));
+	$('#add_button').before(getAppendChartFormHtml(maxId));
+	$('#data_' + maxId + '_name').on('input', nameInput);
+	$('#data_' + maxId + '_color').on('input', colorInput);
+	$('#data_' + maxId + '_remove').on('click', removeOnClick);
+	$('#data_' + maxId + '_vertical').on('input', rangeOnInput);
+	$('#data_' + maxId + '_horizontal').on('input', rangeOnInput);
+	
+	if (typeof name == 'string') updateName(maxId, name);
+	if (typeof color == 'string') updateColor(maxId, color);
+	if (verticalValue && verticalValue !== void 0) updateVertical(maxId, verticalValue);
+	if (horizontalValue && horizontalValue !== void 0) updateHorizontal(maxId, horizontalValue);
+}
+
+function getAppendChartDataDivHtml(id) {
+	return [
+		"\t\t\t\t" + '<div id="chart_data' + id + '" class="chart_data" style="top: 50%; left: 50%;">',
+		"\t\t\t\t\t" + '<svg class="chart_point">',
+		"\t\t\t\t\t\t" + '<circle id="chart_circle' + id + '" fill="#ff0000"/>',
+		"\t\t\t\t\t" + '</svg>',
+		"\t\t\t\t\t" + '<span id="chart_name' + id + '" class="data_name">データ' + id + '</span>',
+		"\t\t\t\t" + '</div>'
+	].join("\n");
+}
+
+function getAppendChartFormHtml(id) {
+	return [
+		"\t\t\t\t\t\t" + '<tr id="data_' + id + '_form">',
+		"\t\t\t\t\t\t\t" + '<td colspan="2" id="data_table">',
+		"\t\t\t\t\t\t\t\t" + '名前：<input type="text" id="data_' + id + '_name" value="データ' + id + '">',
+		"\t\t\t\t\t\t\t\t" + '色：<input type="text" id="data_' + id + '_color" value="#ff0000">',
+		"\t\t\t\t\t\t\t\t" + '<button type="button" id="data_' + id + '_remove">×</button><br>',
+		"\t\t\t\t\t\t\t\t" + '縦軸：<input type="range" id="data_' + id + '_vertical" class="chart_data_range" value="50" min="0" max="100" step="0.2"><input type="text"  id="value_' + id + '_vertical" class="chart_data_value" value="50.0" readonly><br>',
+		"\t\t\t\t\t\t\t\t" + '横軸：<input type="range" id="data_' + id + '_horizontal" class="chart_data_range" value="50" min="0" max="100" step="0.2"><input type="text" id="value_' + id + '_horizontal" class="chart_data_value" value="50.0" readonly>',
+		"\t\t\t\t\t\t\t" + '</td>',
+		"\t\t\t\t\t\t" + '</tr>'
+	].join("\n");
+}
+
+function downloadImage() {
+	getCanvas().then(canvas => {
+		var base64 = canvas.toDataURL('image/png');
+		$('#download').attr('href', base64);
+		$('#download').attr('download', $('#chart_title').html() + ".png");
+		$('#download')[0].click();
+	});
+}
+
+function clipboardImage() {
+	getCanvas().then(canvas => {
+		var base64 = canvas.toDataURL('image/png');
+		
+		var bin = atob(base64.replace(/^.*,/, ''));
+		
+		var buffer = new Uint8Array(bin.length);
+		for (var i = 0 ; i < bin.length ; i++) {
+			buffer[i] = bin.charCodeAt(i);
+		}
+		
+		var blob = new Blob([buffer], {type: 'image/png'});
+		
+		try {
+			navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+		} catch(err) {
+			console.log(err);
+		}
+	});
+}
+
+function getCanvas() {
+	return html2canvas(document.querySelector('#chart'), {useCORS: true});
+}
+
+function exportData() {
+	var jsonData = {
+		title: {
+			chart: $('#form_title').val(),
+			top: $('#form_top').val(),
+			bottom: $('#form_bottom').val(),
+			left: $('#form_left').val(),
+			right: $('#form_right').val()
+		},
+		data: []
+	};
+	
+	for (var i = 1 ; i <= maxId ; i++) {
+		jsonData.data.push({
+			name: $('#data_' + i + '_name').val(),
+			color: $('#data_' + i + '_color').val(),
+			vertical: $('#data_' + i + '_vertical').val(),
+			horizontal: $('#data_' + i + '_horizontal').val()
+		});
+	}
+	
+	var blob = new Blob([JSON.stringify(jsonData)], {type: 'application/json'});
+	$('#download').attr('href', URL.createObjectURL(blob));
+	$('#download').attr('download', 'chart_' + $('#chart_title').html() + ".json");
+	$('#download')[0].click();
+}
+
+function importData() {
+	$('#upload')[0].click();
+}
+
+function uploadFile() {
+	if (event.target.files.length == 0) return;
+	
+	var reader = new FileReader();
+	reader.addEventListener('load', function() {
+		try {
+			var jsonData = JSON.parse(reader.result);
+			
+			console.log(jsonData);
+			
+			$('#form_title').val(jsonData.title.chart);
+			$('#form_top').val(jsonData.title.top);
+			$('#form_bottom').val(jsonData.title.bottom);
+			$('#form_left').val(jsonData.title.left);
+			$('#form_right').val(jsonData.title.right);
+			
+			$('#chart_title').html($('#form_title').val());
+			$('#top_title').html($('#form_top').val());
+			$('#bottom_title').html($('#form_bottom').val());
+			$('#left_title').html($('#form_left').val());
+			$('#right_title').html($('#form_right').val());
+			
+			while (maxId > 0) {
+				$('#data_1_remove')[0].click();
+			}
+			
+			for (var i = 0 ; i < jsonData.data.length ; i++) {
+				addChartData(jsonData.data[i].name, jsonData.data[i].color, jsonData.data[i].vertical, jsonData.data[i].horizontal);
+			}
+		} catch(e) {
+			console.log(e);
+		}
+	});
+	
+	reader.readAsText(event.target.files[0]);
+}
+		</script>
+	</head>
+	<body>
+		<h1>チャートメーカー</h1>
+		<div id="chart">
+			<h2 id="chart_title">チャート タイトル</h2>
+			<div id="chart_body">
+				<h3 id="top_title" class="chart_align_vertical">縦軸の上</h3>
+				<h3 id="left_title" class="chart_align_horizontal">横軸の左</h3>
+				<svg id="chart_frame">
+					<line x1="400" y1="0" x2="400" y2="800" />
+					<line x1="0" y1="400" x2="800" y2="400" />
+					<rect x="0" y="0" width="800" height="800" />
+				</svg>
+				<h3 id="right_title" class="chart_align_horizontal">横軸の右</h3>
+				<h3 id="bottom_title" class="chart_align_vertical">縦軸の下</h3>
+			</div>
+		</div>
+		<div id="chart_form">
+			<form name="chart_form">
+				<table>
+					<tbody>
+						<tr>
+							<td colspan="2">
+								<button type="button" id="button_download"><span style="text-decoration: underline;">↓</span> 画像をダウンロード</button>
+								<a id="download" href="#" download=""></a>
+								<button type="button" id="button_clipboard">画像をクリップボードにコピー</button><br>
+								<button type="button" id="button_export">JSONデータをエクスポート</button>
+								<button type="button" id="button_import">JSONデータをインポート</button>
+								<input type="file" id="upload" />
+							</td>
+						</tr>
+						<tr>
+							<th>タイトル</th>
+							<td>
+								<input type="text" class="text_large" id="form_title" value="チャート タイトル">
+							</td>
+						</tr>
+						<tr>
+							<th>縦軸</th>
+							<td>
+								<input type="text" class="text_large" id="form_top" value="縦軸の上"><br>
+								<input type="text" class="text_large" id="form_bottom" value="縦軸の下">
+							</td>
+						</tr>
+						<tr>
+							<th>横軸</th>
+							<td>
+								<input type="text" class="text_large" id="form_left" value="横軸の左"><br>
+								<input type="text" class="text_large" id="form_right" value="横軸の右">
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<div id="chart_form_data">
+					<table>
+						<tbody>
+							<tr>
+								<th colspan="2">データ</th>
+							</tr>
+							<tr id="add_button">
+								<td colspan="2" id="data_table">
+									<button type="button" id="button_add">＋ データを追加</button>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</form>
+		</div>
+	</body>
+</html>
