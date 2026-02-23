@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アークナイツ：エンドフィールド　発電量制御シミュレータ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <tr>
+            <th width="200px">消費電力量</th>
+            <td><input type="number" id="powerOutput" value="1300"><br>
+            ※デフォルトの発電量200は考慮せず、地域の消費電力量の合計をそのまま入力してください。</td>
+        </tr>
+        <tr>
+            <th>使用発電機燃料</th>
+            <td><select id="generatorFuel">
+                <option value="50/8">源石鉱物 (発電量50/8秒)</option>
+                <option value="220/40">小容量谷地バッテリー (発電量220/40秒)</option>
+                <option value="420/40">中容量谷地バッテリー (発電量420/40秒)</option>
+                <option value="1100/40" selected>大容量谷地バッテリー (発電量1100/40秒)</option>
+                <option value="1600/40">小容量武陵バッテリー (発電量1600/40秒)</option>
+            </select></td>
+        </tr>
+        <tr>
+            <th>必要発電機稼働率</th>
+            <td><span id="generatorUtilization">0</span>%</td>
+        </tr>
+        <tr>
+            <th>必要発電機数</th>
+            <td><span id="generatorCount">0</span>基</td>
+        </tr>
+        <tr>
+            <th>必要燃料数</th>
+            <td><span id="fuelCountPerSecond">0</span>個/秒</td>
+        </tr>
+        <tr>
+            <th>燃料数制御ライン長さ</th>
+            <td><input type="number" id="lineLength" value="10"><br>
+            長いほど発電量の精度が上がり、無駄がなくなります。</td>
+        </tr>
+        <tr>
+            <th>燃料数制御</th>
+            <td>0.5個/秒 ✕ (<span id="lineControlValue">0</span>/<span id="lineParticleSize">1024</span>) ＝ <span id="fuelControlValue">0.5000</span>個/秒</td>
+        </tr>
+        <tr>
+            <th>燃料数制御ライン図</th>
+            <td><span id="lineImage"></span></td>
+        </tr>
+    </table>
+</body>
+<foot>
+    <script type="text/javascript">
+        const DEFAULT_POWER_OUTPUT = 200;
+        const DEFAULT_LINE_THROUGHPUT = 0.5;
+        const CELL_SIZE = "48px";
+
+        const BeltType = {
+            BELT_LR: {
+                Name: "ベルト（左から右）",
+                ImageURL: "image/belt-straight.png",
+                Rotate: 90
+            },
+            BELT_RL: {
+                Name: "ベルト（右から左）",
+                ImageURL: "image/belt-straight.png",
+                Rotate: 270
+            },
+            BELT_LD: {
+                Name: "ベルト（左から下）",
+                ImageURL: "image/belt-curve-r.png",
+                Rotate: 90
+            },
+            BELT_UL: {
+                Name: "ベルト（上から左）",
+                ImageURL: "image/belt-curve-r.png",
+                Rotate: 180
+            },
+            BRIDGE: {
+                Name: "ベルトブリッジ",
+                ImageURL: "image/belt-bridge.png"
+            },
+            MERGE_L: {
+                Name: "合流器（左へ）",
+                ImageURL: "image/belt-merge.png",
+                Rotate: 270
+            },
+            MERGE_R: {
+                Name: "合流器（右へ）",
+                ImageURL: "image/belt-merge.png",
+                Rotate: 90
+            },
+            SPLIT_R: {
+                Name: "分流器（右へ）",
+                ImageURL: "image/belt-split.png",
+                Rotate: 90
+            },
+            BLANK: {
+                Name: "空白",
+                ImageURL: "image/blank.png"
+            }
+        }
+
+        function updateValues() {
+            const powerOutput = parseInt(document.getElementById("powerOutput").value) || 0;
+            const generatorFuel = document.getElementById("generatorFuel").value || "40/8";
+            const [fuelPower, fuelSeconds] = generatorFuel.split("/").map(Number);
+            const lineLength = parseInt(document.getElementById("lineLength").value) || 10;
+            
+            const generatorUtilization = (Math.max(0, powerOutput - DEFAULT_POWER_OUTPUT) / fuelPower);
+            document.getElementById("generatorUtilization").textContent = (generatorUtilization * 100).toFixed(4);
+
+            const generatorCount = Math.ceil(generatorUtilization);
+            document.getElementById("generatorCount").textContent = generatorCount;
+            
+            const fuelCountPerSecond = generatorUtilization / fuelSeconds;
+            document.getElementById("fuelCountPerSecond").textContent = fuelCountPerSecond.toFixed(4);
+
+            const lineParticleSize = Math.pow(2, lineLength);
+            document.getElementById("lineParticleSize").textContent = lineParticleSize;
+
+            const lineControlValue = Math.ceil((fuelCountPerSecond / DEFAULT_LINE_THROUGHPUT) * lineParticleSize);
+            document.getElementById("lineControlValue").textContent = lineControlValue;
+
+            const fuelControlValue = DEFAULT_LINE_THROUGHPUT * (lineControlValue / lineParticleSize);
+            document.getElementById("fuelControlValue").textContent = fuelControlValue.toFixed(4);
+
+            const lineMap = [[], [], []];
+            lineMap[0].push(BeltType.BELT_LR);
+            for (let i = 0; i < lineLength - 1; i++) {
+                lineMap[0].push(BeltType.SPLIT_R);
+            }
+            lineMap[0].push(BeltType.BELT_LD);
+            lineMap[0].push(BeltType.BLANK);
+
+            lineMap[1].push(BeltType.BLANK);
+            let lineValueSize = lineParticleSize / 2;
+            let tempLineControlValue = lineControlValue;
+            for (let i = 0; i < lineLength; i++) {
+                if (tempLineControlValue >= lineValueSize) {
+                    lineMap[1].push(BeltType.MERGE_R);
+                    tempLineControlValue -= lineValueSize;
+                } else {
+                    lineMap[1].push(BeltType.BRIDGE);
+                }
+                lineValueSize /= 2;
+            }
+            lineMap[1].push(BeltType.BELT_LR);
+
+            lineMap[2].push(BeltType.BELT_RL);
+            for (let i = 0; i < lineLength - 1; i++) {
+                lineMap[2].push(BeltType.MERGE_L);
+            }
+            lineMap[2].push(BeltType.BELT_UL);
+            lineMap[2].push(BeltType.BLANK);
+
+            const lineImageContainer = document.getElementById("lineImage");
+            lineImageContainer.innerHTML = "";
+            lineMap.forEach(row => {
+                const rowDiv = document.createElement("div");
+                rowDiv.style.height = CELL_SIZE;
+                row.forEach(cell => {
+                    if (cell.ImageURL) {
+                        const img = document.createElement("img");
+                        img.src = cell.ImageURL;
+                        img.style.width = CELL_SIZE;
+                        img.style.height = CELL_SIZE;
+                        if (cell.Rotate && cell.Rotate !== 0) {
+                            img.style.transform = `rotate(${cell.Rotate}deg)`;
+                        }
+                        img.title = cell.Name;
+                        rowDiv.appendChild(img);
+                    } else {
+                        const blankDiv = document.createElement("div");
+                        blankDiv.style.width = CELL_SIZE;
+                        blankDiv.style.height = CELL_SIZE;
+                        rowDiv.appendChild(blankDiv);
+                    }
+                });
+                lineImageContainer.appendChild(rowDiv);
+            });
+        }
+
+        function init() {
+            document.addEventListener("DOMContentLoaded", function() {
+                updateValues();
+            });
+
+            document.querySelectorAll("#powerOutput, #generatorFuel, #lineLength").forEach(input => {
+                input.addEventListener("change", updateValues);
+                input.addEventListener("input", updateValues);
+            });
+        }
+
+        init();
+    </script>
+</foot>
+</html>
