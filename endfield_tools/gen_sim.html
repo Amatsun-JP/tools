@@ -20,13 +20,23 @@
         }
         th {
             background-color: #f2f2f2;
+            width: 200px;
+            min-width: 200px;
+        }
+        td {
+            max-width: 1000px;
+        }
+        #lineImage {
+            display: inline-flex;
+            flex-direction: column;
+            white-space: nowrap;
         }
     </style>
 </head>
 <body>
     <table>
         <tr>
-            <th width="200px">消費電力量</th>
+            <th>消費電力量</th>
             <td><input type="number" id="powerOutput" value="1300"><br>
             ※デフォルトの発電量200は考慮せず、地域の消費電力量の合計をそのまま入力してください。</td>
         </tr>
@@ -63,7 +73,7 @@
         </tr>
         <tr>
             <th>燃料数制御ライン図</th>
-            <td><span id="lineImage"></span></td>
+            <td style="overflow-x: auto"><div id="lineImage"></div></td>
         </tr>
     </table>
 </body>
@@ -177,6 +187,7 @@
             lineMap.forEach(row => {
                 const rowDiv = document.createElement("div");
                 rowDiv.style.height = CELL_SIZE;
+                rowDiv.style.display = "flex";
                 row.forEach(cell => {
                     if (cell.ImageURL) {
                         const img = document.createElement("img");
@@ -213,5 +224,4 @@
         init();
     </script>
 </foot>
-
 </html>
